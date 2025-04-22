@@ -3,13 +3,9 @@ from collections import deque
 import concurrent.futures
 
 
-
-
-
-
-def BSF(tree, target):
+def BSF(tree, start, end):
    visited = []
-   queue = deque([target])
+   queue = deque([start])
    
    while queue:
         node = queue.popleft()
@@ -21,3 +17,22 @@ def BSF(tree, target):
                 if child not in visited:
                     queue.append(child)
                     
+                
+def search_path(neighbor, end, tree):
+    return BSF(tree, neighbor, end)
+
+
+def BSF_paralel(tree, start, end):
+    paths = []
+    
+    with concurrent.futures.ThreadPoolExecutor() as executor:
+        futures = []
+        for node in tree[start]:
+            futures.append(executor.submit(search_path, tree, node, end))
+        
+        for future in concurrent.futures.as_completed(futures):
+            for path in future.result():
+                paths.append([start] + path)
+    
+    return paths
+    
