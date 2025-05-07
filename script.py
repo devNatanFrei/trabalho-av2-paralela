@@ -1,82 +1,62 @@
 from collections import deque
-from multiprocessing import Process, Queue
+import concurrent.futures
 import time
-import random
-import string
-import pprint
 
-def BFS(tree, initial, final):
-    queue = deque([(initial, [initial])])
-    paths = []
+grafo = {
+    "RH": ["Financeiro", "TI"],
+    "Financeiro": ["RH", "Marketing"],
+    "TI": ["RH", "Operações"],
+    "Marketing": ["Financeiro", "Vendas"],
+    "Vendas": ["Marketing"],
+    "Operações": ["TI"]
+}
 
-    while queue:
-        current_node, path = queue.popleft()
-        for neighbor in tree.get(current_node, []):
-            if neighbor in path:
-                continue
-            if neighbor == final:
-                paths.append(path + [neighbor])
-            else:
-                queue.append((neighbor, path + [neighbor]))
-    return paths
+def busca_largura_todos_caminhos(grafo, inicio, destino):
+    fila = deque([[inicio]])
+    caminhos = []
+
+    while fila:
+        caminho = fila.popleft()
+        no_atual = caminho[-1]
+
+        if no_atual == destino:
+            caminhos.append(caminho)
+        else:
+            for vizinho in grafo.get(no_atual, []):
+                if vizinho not in caminho:
+                    fila.append(caminho + [vizinho])
+
+    return caminhos
+
+def busca_paralela(entrada):
+    grafo, (inicio, destino) = entrada
+    return ((inicio, destino), busca_largura_todos_caminhos(grafo, inicio, destino))
+
+def principal():
+    nos = list(grafo.keys())
+    pares_de_nos = [(a, b) for i, a in enumerate(nos) for b in nos[i+1:] if a != b]
+
+    
+
+    tempo_inicio_seq = time.time()
+    resultados_sequencial = [busca_paralela((grafo, par)) for par in pares_de_nos]
+    tempo_fim_seq = time.time()
+    tempo_total_seq = tempo_fim_seq - tempo_inicio_seq
+    print(resultados_sequencial)
+    print(f"\nTempo de execução SEQUENCIAL: {tempo_total_seq:.6f} segundos")
+
+    tempo_inicio_par = time.time()
+    with concurrent.futures.ProcessPoolExecutor() as executor:
+        resultados_paralelo = list(executor.map(busca_paralela, [(grafo, par) for par in pares_de_nos]))
+    tempo_fim_par = time.time()
+    tempo_total_par = tempo_fim_par - tempo_inicio_par
+    print(resultados_paralelo)
+    print(f"Tempo de execução PARALELA: {tempo_total_par:.6f} segundos")
+
+    ganho = tempo_total_seq / tempo_total_par if tempo_total_par > 0 else float('inf')
+    print(f"\nGanho de desempenho com paralelismo: {ganho:.6f}x mais rápido")
 
 
-def worker(tree, neighbor, final, queue_results):
-    result = BFS(tree, neighbor, final)
-    queue_results.put((neighbor, result))
-
-def BFS_parallel(tree, initial, final):
-    processes = []
-    queue_results = Queue()
-    finded_paths = []
-
-    for neighbor in tree.get(initial, []):
-        p = Process(target=worker, args=(tree, neighbor, final, queue_results))
-        processes.append(p)
-        p.start()
-
-    for p in processes:
-        p.join()
-
-    while not queue_results.empty():
-        neighbor, result = queue_results.get()
-        for path in result:
-            finded_paths.append([initial] + path)
-    return finded_paths
-
-def generate_graph():
-    graph = {}
-    nodes = [chr(i) for i in range(65, 75)]  
-    for node in nodes:
-        connections = random.sample(nodes, random.randint(1, 3))
-        if node in connections:
-            connections.remove(node)
-        graph[node] = connections
-    return graph
 
 if __name__ == "__main__":
-    initial = 'A'
-    final = 'J'
-
-    graph = generate_graph()
-
-    print("Grafo gerado:")
-    pprint.pprint(graph)
-
-    print("\nCaminhos BFS sequencial:")
-    time_seq_start = time.time()
-    seq_paths = BFS(graph, initial, final)
-    time_seq_end = time.time()
-    print(seq_paths)
-    print(f"Tempo de execução: {time_seq_end - time_seq_start:.6f} segundos")
-
-    print("\nCaminhos BFS paralelo:")
-    time_par_start = time.time()
-    par_paths = BFS_parallel(graph, initial, final)
-    time_par_end = time.time()
-    print(par_paths)
-    print(f"Tempo de execução: {time_par_end - time_par_start:.6f} segundos")
-
-    if (time_par_end - time_par_start) > 0:
-        speedup = (time_seq_end - time_seq_start) / (time_par_end - time_par_start)
-        print(f"\nSpeedup: {speedup:.6f}x")
+    principal()
